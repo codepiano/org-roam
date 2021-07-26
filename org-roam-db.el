@@ -151,7 +151,8 @@ The query is expected to be able to fail, in this situation, run HANDLER."
      [(file :unique :primary-key)
       (hash :not-null)
       (atime :not-null)
-      (mtime :not-null)])
+      (mtime :not-null)
+      (modifiedTime integer :not-null)])
 
     (nodes
      ([(id :not-null :primary-key)
@@ -257,11 +258,12 @@ If UPDATE-P is non-nil, first remove the file in the database."
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
+         (modifiedTime (car (time-convert mtime 1000)))
          (hash (org-roam-db--file-hash)))
     (org-roam-db-query
      [:insert :into files
       :values $v1]
-     (list (vector file hash atime mtime)))))
+     (list (vector file hash atime mtime modifiedTime)))))
 
 (defun org-roam-db-get-scheduled-time ()
   "Return the scheduled time at point in ISO8601 format."
@@ -429,23 +431,14 @@ If UPDATE-P is non-nil, first remove the file in the database."
   (save-excursion
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
-          (path (org-element-property :path link))
+          (dest (org-element-property :path link))
           (properties (list :outline (org-get-outline-path)))
           (source (org-roam-id-at-point)))
-      ;; For Org-ref links, we need to split the path into the cite keys
-      (when (and (boundp 'org-ref-cite-types)
-                 (fboundp 'org-ref-split-and-strip-string)
-                 (member type org-ref-cite-types))
-        (setq path (org-ref-split-and-strip-string path)))
-      (unless (listp path)
-        (setq path (list path)))
-      (when (and source path)
+      (when source
         (org-roam-db-query
          [:insert :into links
           :values $v1]
-         (mapcar (lambda (p)
-                   (vector (point) source p type properties))
-                 path))))))
+         (vector (point) source dest type properties))))))
 
 ;;;;; Fetching
 (defun org-roam-db--get-current-files ()
