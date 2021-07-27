@@ -319,7 +319,11 @@ If UPDATE-P is non-nil, first remove the file in the database."
                (tags org-file-tags)
                (refs (org-entry-get (point) "ROAM_REFS"))
                (properties (org-entry-properties))
-               (olp (org-get-outline-path)))
+               (olp (org-get-outline-path))
+               (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+               (createdTime (if createdTimeProperty
+                                (parse-iso8601-to-time (cdr createdTimeProperty))
+                                (org-roam-reverie-get-created-time-from-path file))))
           (org-roam-db-query!
            (lambda (err)
              (lwarn 'org-roam :warning "%s for %s (%s) in %s"
@@ -328,7 +332,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
            [:insert :into nodes
             :values $v1]
            (vector id file level pos todo priority
-                   scheduled deadline title properties olp))
+                   scheduled deadline title properties olp createdTime))
           (when tags
             (org-roam-db-query
              [:insert :into tags
@@ -379,7 +383,11 @@ If UPDATE-P is non-nil, first remove the file in the database."
                              (cl-return-from org-roam-db-insert-node-data))))
            (properties (org-entry-properties))
            (olp (org-get-outline-path))
-           (title (org-link-display-format title)))
+           (title (org-link-display-format title))
+           (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+           (createdTime (if createdTimeProperty
+                            (parse-iso8601-to-time (cdr createdTimeProperty))
+                            (org-roam-reverie-get-created-time-from-path file))))
       (org-roam-db-query!
        (lambda (err)
          (lwarn 'org-roam :warning "%s for %s (%s) in %s"
@@ -388,7 +396,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
        [:insert :into nodes
         :values $v1]
        (vector id file level pos todo priority
-               scheduled deadline title properties olp)))))
+               scheduled deadline title properties olp createdTime)))))
 
 (defun org-roam-db-insert-aliases ()
   "Insert aliases for node at point into Org-roam cache."
