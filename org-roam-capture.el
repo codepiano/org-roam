@@ -579,6 +579,7 @@ Return the ID of the location."
         (org-entry-put p "ID" id))
       (prog1
           (org-id-get-create)
+          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))
         (run-hooks 'org-roam-capture-new-node-hook)))))
 
 (defun org-roam-capture--new-file-p (path)
