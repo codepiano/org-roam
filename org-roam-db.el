@@ -316,9 +316,9 @@ If UPDATE-P is non-nil, first remove the file in the database."
                (refs (org-entry-get (point) "ROAM_REFS"))
                (properties (org-entry-properties))
                (olp nil))
-               (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+               (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
                (createdTime (if createdTimeProperty
-                                (parse-iso8601-to-time (cdr createdTimeProperty))
+                                (iso8601-to-timestamp (cdr createdTimeProperty))
                                 (org-roam-reverie-get-created-time-from-path file))))
           (org-roam-db-query!
            (lambda (err)
@@ -379,10 +379,10 @@ If UPDATE-P is non-nil, first remove the file in the database."
                              (cl-return-from org-roam-db-insert-node-data))))
            (properties (org-entry-properties))
            (olp (org-get-outline-path nil 'use-cache))
-           (title (org-link-display-format title)))
-           (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+           (title (org-link-display-format title))
+           (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
            (createdTime (if createdTimeProperty
-                            (parse-iso8601-to-time (cdr createdTimeProperty))
+                            (iso8601-to-timestamp (cdr createdTimeProperty))
                             (org-roam-reverie-get-created-time-from-path file))))
       (org-roam-db-query!
        (lambda (err)
