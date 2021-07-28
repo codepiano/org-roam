@@ -26,11 +26,11 @@
 
 (defun org-roam-reverie-update-nodes-createdTime ()
   "fill column createdTime in files table"
-  (let ((rows (org-roam-db-query  "select file from nodes ")))
+  (let ((rows (org-roam-db-query  "select file, title from nodes ")))
    (cl-loop for row in rows
-             collect (pcase-let* ((`(,file)
+             collect (pcase-let* ((`(,file ,title)
                                   row))
-                              (org-roam-db-query [:update nodes :set (= createdTime $s1) :where (= file $s2)] (org-roam-reverie-get-created-time-from-path file) file)))))
+                              (org-roam-db-query [:update nodes :set (= createdTime $s1) :where (and (= file $s2) (= title $s3)) ] (org-roam-reverie-get-created-time-from-path file) file title)))))
 
 (defun org-roam-reverie-migrate-nodes-table ()
   "migrate nodes table"
