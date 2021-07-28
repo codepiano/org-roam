@@ -320,9 +320,9 @@ If UPDATE-P is non-nil, first remove the file in the database."
                (refs (org-entry-get (point) "ROAM_REFS"))
                (properties (org-entry-properties))
                (olp (org-get-outline-path))
-               (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+               (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
                (createdTime (if createdTimeProperty
-                                (parse-iso8601-to-time (cdr createdTimeProperty))
+                                (iso8601-to-timestamp (cdr createdTimeProperty))
                                 (org-roam-reverie-get-created-time-from-path file))))
           (org-roam-db-query!
            (lambda (err)
@@ -384,9 +384,9 @@ If UPDATE-P is non-nil, first remove the file in the database."
            (properties (org-entry-properties))
            (olp (org-get-outline-path))
            (title (org-link-display-format title))
-           (createdTimeProperty (assoc org-roam-reverie-property-created-time (org-entry-properties)))
+           (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
            (createdTime (if createdTimeProperty
-                            (parse-iso8601-to-time (cdr createdTimeProperty))
+                            (iso8601-to-timestamp (cdr createdTimeProperty))
                             (org-roam-reverie-get-created-time-from-path file))))
       (org-roam-db-query!
        (lambda (err)
@@ -529,6 +529,7 @@ If the file exists, update the cache with information."
   (add-hook 'after-save-hook #'org-roam-db-update-file nil t))
 
 (add-hook 'org-roam-find-file-hook #'org-roam-db--update-on-save-h)
+; (add-hook 'before-save-file #'org-roam-reverie-migrate-property)
 
 ;; Diagnostic Interactives
 (defun org-roam-db-diagnose-node ()

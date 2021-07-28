@@ -60,6 +60,7 @@
 (require 'org-roam-dailies)
 (require 'org-roam-db)
 (require 'org-roam-reverie)
+(require 'org-roam-reverie-migrate)
 
 ;;; Declarations
 ;; From org-ref-core.el
