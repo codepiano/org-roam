@@ -506,7 +506,7 @@ also run Org-capture's template expansion."
   (funcall (if org-capture-p #'org-capture-fill-template #'identity)
            (org-roam-format
             template
-            (lambda (key)
+            (lambda (key default-val)
               (let ((fn (intern key))
                     (node-fn (intern (concat "org-roam-node-" key)))
                     (ksym (intern (concat ":" key))))
@@ -517,7 +517,7 @@ also run Org-capture's template expansion."
                   (funcall node-fn org-roam-capture--node))
                  ((plist-get org-roam-capture--info ksym)
                   (plist-get org-roam-capture--info ksym))
-                 (t (let ((r (completing-read (format "%s: " key) nil)))
+                 (t (let ((r (completing-read (format "%s: " key) nil nil nil default-val)))
                       (plist-put org-roam-capture--info ksym r)
                       r))))))))
 
@@ -529,15 +529,15 @@ also run Org-capture's template expansion."
 (defun org-roam-capture--goto-location ()
   "Initialize the buffer, and goto the location of the new capture.
 Return the ID of the location."
-  (let (p)
+  (let (p new-file-p)
     (pcase (or (org-roam-capture--get :if-new)
                (user-error "Template needs to specify `:if-new'"))
       (`(file ,path)
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (unless (file-exists-p path)
-         (org-roam-capture--put :new-file path))
+       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (when new-file-p (org-roam-capture--put :new-file path))
        (set-buffer (org-capture-target-buffer path))
        (widen)
        (setq p (goto-char (point-min))))
@@ -545,9 +545,9 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
+       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (when new-file-p (org-roam-capture--put :new-file path))
        (set-buffer (org-capture-target-buffer path))
-       (unless (file-exists-p path)
-         (org-roam-capture--put :new-file path))
        (setq p (point-min))
        (let ((m (org-roam-capture-find-or-create-olp olp)))
          (goto-char m))
@@ -556,8 +556,9 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
+       (setq new-file-p (not (org-find-base-buffer-visiting path)))
        (set-buffer (org-capture-target-buffer path))
-       (unless (file-exists-p path)
+       (when new-file-p
          (org-roam-capture--put :new-file path)
          (insert (org-roam-capture--fill-template head t)))
        (widen)
@@ -566,9 +567,10 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (widen)
+       (setq new-file-p (not (org-find-base-buffer-visiting path)))
        (set-buffer (org-capture-target-buffer path))
-       (unless (file-exists-p path)
+       (widen)
+       (when new-file-p
          (org-roam-capture--put :new-file path)
          (insert (org-roam-capture--fill-template head t)))
        (setq p (point-min))
