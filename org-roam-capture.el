@@ -526,6 +526,11 @@ also run Org-capture's template expansion."
   (when-let ((ref (plist-get org-roam-capture--info :ref)))
     (org-roam-ref-add ref)))
 
+(defun org-roam-capture--new-file-p (path)
+  "Return t if PATH is for a new file with no visiting buffer."
+  (not (or (file-exists-p path)
+           (org-find-base-buffer-visiting path))))
+
 (defun org-roam-capture--goto-location ()
   "Initialize the buffer, and goto the location of the new capture.
 Return the ID of the location."
@@ -536,7 +541,7 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (setq new-file-p (org-roam-capture--new-file-p path))
        (when new-file-p (org-roam-capture--put :new-file path))
        (set-buffer (org-capture-target-buffer path))
        (widen)
@@ -545,7 +550,7 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (setq new-file-p (org-roam-capture--new-file-p path))
        (when new-file-p (org-roam-capture--put :new-file path))
        (set-buffer (org-capture-target-buffer path))
        (setq p (point-min))
@@ -556,7 +561,7 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (setq new-file-p (org-roam-capture--new-file-p path))
        (set-buffer (org-capture-target-buffer path))
        (when new-file-p
          (org-roam-capture--put :new-file path)
@@ -567,7 +572,7 @@ Return the ID of the location."
        (setq path (expand-file-name
                    (string-trim (org-roam-capture--fill-template path t))
                    org-roam-directory))
-       (setq new-file-p (not (org-find-base-buffer-visiting path)))
+       (setq new-file-p (org-roam-capture--new-file-p path))
        (set-buffer (org-capture-target-buffer path))
        (widen)
        (when new-file-p
@@ -796,7 +801,7 @@ properties to be added to the template."
 (cl-defun org-roam-capture- (&key goto keys node info props templates)
   "Main entry point.
 GOTO and KEYS correspond to `org-capture' arguments.
-INFO is an alist for filling up Org-roam's capture templates.
+INFO is a plist for filling up Org-roam's capture templates.
 NODE is an `org-roam-node' construct containing information about the node.
 PROPS is a plist containing additional Org-roam properties for each template.
 TEMPLATES is a list of org-roam templates."
