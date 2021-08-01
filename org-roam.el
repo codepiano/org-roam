@@ -319,7 +319,7 @@ Org-roam."
   ;; Disable local hooks for all org-roam buffers
   (dolist (buf (org-roam-buffer-list))
     (with-current-buffer buf
-      (remove-hook 'after-save-hook #'org-roam-db-update-file t))))
+      (remove-hook 'after-save-hook #'org-roam-db--update-on-save t))))
 
 ;;; Hooks and advices
 (defun org-roam--file-setup ()
