@@ -27,14 +27,14 @@
 (defun org-roam-reverie-brother-headline ()
   "insert same level headline node"
   (interactive)
-  (progn (org-insert-heading)
+  (progn (org-insert-heading-respect-content)
          (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
 
 (defun org-roam-reverie-child-headline ()
   "insert next level headline node"
   (interactive)
-  (progn (org-insert-heading)
+  (progn (org-insert-heading-respect-content)
          (org-do-demote)
          (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
@@ -42,7 +42,7 @@
 (defun org-roam-reverie-child-headline-simple ()
   "insert next level headline node"
   (interactive)
-  (progn (org-insert-heading)
+  (progn (org-insert-heading-respect-content)
          (org-do-demote)))
 
 (defun org-roam-reverie-exclude-headline ()
