@@ -449,7 +449,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
           (dest (org-element-property :path link))
           (properties (list :outline (org-get-outline-path)))
           (source (org-roam-id-at-point)))
-      (when source
+      (when (and source (org-roam-reverie-node-exists-p dest))
         (org-roam-db-query
          [:insert :into links
           :values $v1]
@@ -473,6 +473,12 @@ If UPDATE-P is non-nil, first remove the file in the database."
         (secure-hash 'sha1 (current-buffer)))
     (org-with-wide-buffer
      (secure-hash 'sha1 (current-buffer)))))
+
+;;;;; Predicating
+(defun org-roam-reverie-node-exists-p (id)
+  (if id
+    (org-roam-db-query [:select [id] :from nodes :where (= id $s1)] id)
+    nil))
 
 ;;;;; Updating
 ;;;###autoload (autoload 'org-roam-db-sync "org-roam" nil t)
