@@ -441,7 +441,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
                                          (org-get-outline-path 'with-self 'use-cache)
                                        (t nil))))
           (source (org-roam-id-at-point)))
-      (when source
+      (when (and source (org-roam-reverie-node-exists-p dest))
         (org-roam-db-query
          [:insert :into links
           :values $v1]
@@ -496,6 +496,13 @@ If the file exists, update the cache with information."
           (org-roam-db-map-links
            (list #'org-roam-db-insert-link)))))))
 
+;;;;; Predicating
+(defun org-roam-reverie-node-exists-p (id)
+  (if id
+    (org-roam-db-query [:select [id] :from nodes :where (= id $s1)] id)
+    nil))
+
+;;;;; Updating
 ;;;###autoload
 (defun org-roam-db-sync (&optional force)
   "Synchronize the cache state with the current Org files on-disk.
