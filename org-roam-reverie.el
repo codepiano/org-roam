@@ -1,20 +1,20 @@
 (defconst org-roam-reverie-property-created-time "CREATED_TIME")
 (defconst org-roam-reverie-roam-exclude "ROAM_EXCLUDE")
 
-(defun org-roam-reverie-init-node ()
+(defun reverie-init-node ()
   "init org-roam headline node"
   (interactive)
   (progn (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
 
-(defun org-roam-reverie-init-id-headline ()
+(defun reverie-init-id-headline ()
   "init simple headline node"
   (interactive)
   (progn (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))
          (org-entry-put nil org-roam-reverie-roam-exclude "t")))
 
-(defun org-roam-reverie-init-headline-id ()
+(defun reverie-init-headline-id ()
   "process every headline, add id if not exist"
   (interactive)
   (org-with-point-at 1
@@ -24,14 +24,14 @@
          (when (not id)
            (org-id-get-create)))))))
 
-(defun org-roam-reverie-brother-headline ()
+(defun reverie-brother-headline ()
   "insert same level headline node"
   (interactive)
   (progn (org-insert-heading-respect-content)
          (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
 
-(defun org-roam-reverie-child-headline ()
+(defun reverie-child-headline ()
   "insert next level headline node"
   (interactive)
   (progn (org-insert-heading-respect-content)
@@ -39,25 +39,65 @@
          (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
 
-(defun org-roam-reverie-child-headline-simple ()
+(defun reverie-child-headline-simple ()
   "insert next level headline node"
   (interactive)
   (progn (org-insert-heading-respect-content)
          (org-do-demote)))
 
-(defun org-roam-reverie-exclude-headline ()
+(defun reverie-exclude-headline ()
   "exclude headline node"
   (interactive)
   (when (and (org-at-heading-p (org-back-to-heading t)) (org-id-get))
     (when (not (cdr (assoc org-roam-reverie-roam-exclude (org-entry-properties))))
       (org-entry-put nil org-roam-reverie-roam-exclude "t"))))
 
-(defun org-roam-reverie-toggle-exclude-headline ()
+(defun reverie-toggle-exclude-headline ()
   "toggle exclude headline node"
   (interactive)
   (when (and (org-at-heading-p (org-back-to-heading t)) (org-id-get))
     (if (cdr (assoc org-roam-reverie-roam-exclude (org-entry-properties)))
       (org-entry-delete nil org-roam-reverie-roam-exclude)
       (org-entry-put nil org-roam-reverie-roam-exclude "t"))))
+
+(defun reverie-collect-data ()
+  (let ((id (cdr (assoc "ID" (org-entry-properties))))
+        (title (nth 4 (org-heading-components))))
+    (if id
+      (cons id title)
+      nil)))
+
+(defun org-dblock-write:reverie-insert-children-nodes (param)
+  "toggle exclude headline node"
+  (interactive)
+  (let* ((level (nth 1 (org-heading-components)))
+         (match (format "+ID={.+}+LEVEL=%d+%s<>{.+}" (+ level 1) org-roam-reverie-roam-exclude)))
+    (save-excursion
+      (let ((heading-nodes (org-map-entries #'reverie-collect-data match 'tree)))
+        (when (> (length heading-nodes) 0)
+          (insert (mapconcat (lambda (node) (org-link-make-string
+                                      (concat "id:" (car node))
+                                      (cdr node)))
+                     heading-nodes "\n")))))))
+
+(defun reverie-insert-children-nodes ()
+  "toggle exclude headline node"
+  (interactive)
+  (let* ((level (nth 1 (org-heading-components)))
+         (match (format "+ID={.+}+LEVEL=%d+%s<>{.+}" (+ level 1) org-roam-reverie-roam-exclude)))
+    (save-excursion
+      (org-back-to-heading t)
+      (let ((heading-nodes (org-map-entries #'reverie-collect-data match 'tree)))
+        (when (> (length heading-nodes) 0)
+          (mapcar (lambda (node) (progn (org-end-of-meta-data t)
+                                        (newline)
+                                        (previous-line)
+                                        (insert (org-link-make-string
+                                                  (concat "id:" (car node))
+                                                  (cdr node)))
+                                        (newline)))
+                  heading-nodes))))))
+
+
 
 (provide 'org-roam-reverie)
