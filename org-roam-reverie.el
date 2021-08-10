@@ -68,12 +68,18 @@
       nil)))
 
 (defun org-dblock-write:reverie-insert-children-nodes (param)
-  "toggle exclude headline node"
+  "dynamic block function, insert subheading nodes"
   (interactive)
-  (let* ((level (nth 1 (org-heading-components)))
+  (let* ((before-first (org-before-first-heading-p))
+         (level (if before-first
+                  0
+                  (nth 1 (org-heading-components))))
+         (scope (if before-first
+                  'file
+                  'tree))
          (match (format "+ID={.+}+LEVEL=%d+%s<>{.+}" (+ level 1) org-roam-reverie-roam-exclude)))
     (save-excursion
-      (let ((heading-nodes (org-map-entries #'reverie-collect-data match 'tree)))
+      (let ((heading-nodes (org-map-entries #'reverie-collect-data match scope)))
         (when (> (length heading-nodes) 0)
           (insert (mapconcat (lambda (node) (org-link-make-string
                                       (concat "id:" (car node))
@@ -81,13 +87,20 @@
                      heading-nodes "\n")))))))
 
 (defun reverie-insert-children-nodes ()
-  "toggle exclude headline node"
+  "insert subheading nodes"
   (interactive)
-  (let* ((level (nth 1 (org-heading-components)))
+  (let* ((before-first (org-before-first-heading-p))
+         (level (if before-first
+                  0
+                  (nth 1 (org-heading-components))))
+         (scope (if before-first
+                  'file
+                  'tree))
          (match (format "+ID={.+}+LEVEL=%d+%s<>{.+}" (+ level 1) org-roam-reverie-roam-exclude)))
     (save-excursion
-      (org-back-to-heading t)
-      (let ((heading-nodes (org-map-entries #'reverie-collect-data match 'tree)))
+      (when (not before-first)
+        (org-back-to-heading t))
+      (let ((heading-nodes (org-map-entries #'reverie-collect-data match scope)))
         (when (> (length heading-nodes) 0)
           (mapcar (lambda (node) (progn (org-end-of-meta-data t)
                                         (newline)
@@ -97,7 +110,5 @@
                                                   (cdr node)))
                                         (newline)))
                   heading-nodes))))))
-
-
 
 (provide 'org-roam-reverie)
