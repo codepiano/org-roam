@@ -33,6 +33,8 @@
 ;;
 ;;; Code:
 (require 'org-roam)
+(require 'org-roam-reverie)
+(require 'org-roam-reverie-utils)
 
 ;;;; Declarations
 (defvar org-end-time-was-given)

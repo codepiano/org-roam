@@ -315,7 +315,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
                (tags org-file-tags)
                (refs (org-entry-get (point) "ROAM_REFS"))
                (properties (org-entry-properties))
-               (olp nil))
+               (olp nil)
                (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
                (createdTime (if createdTimeProperty
                                 (iso8601-to-timestamp (cdr createdTimeProperty))
@@ -392,7 +392,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
        [:insert :into nodes
         :values $v1]
        (vector id file level pos todo priority
-               scheduled deadline title properties olp createdTime))))
+               scheduled deadline title properties olp createdTime)))))
 
 (defun org-roam-db-insert-aliases ()
   "Insert aliases for node at point into Org-roam cache."
