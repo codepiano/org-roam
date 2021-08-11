@@ -550,7 +550,7 @@ installer automatically takes care of it for you.
 
 @itemize
 @item
-Open Emacs and call @code{M-x org-roam-setup}
+Open Emacs and call @code{M-x org-roam-db-autosync-mode}
 
 This will automatically start compiling @code{emacsql-sqlite}; you should see a
 @end itemize
@@ -637,12 +637,12 @@ The @code{file-truename} function is only necessary when you use symbolic links
 inside @code{org-roam-directory}: Org-roam does not resolve symbolic links.
 
 Next, we setup Org-roam to run functions on file changes to maintain cache
-consistency. This is achieved by running @code{M-x org-roam-setup}. To ensure that
-Org-roam is available on startup, place this in your Emacs configuration:
+consistency. This is achieved by running @code{M-x org-roam-db-autosync-mode~}.
+To ensure that Org-roam is available on startup, place this in your Emacs
+configuration:
 
 @lisp
-(require 'org-roam)
-(org-roam-setup)
+(org-roam-db-autosync-mode)
 @end lisp
 
 To build the cache manually, run @code{M-x org-roam-db-sync}. Cache builds may
@@ -798,10 +798,10 @@ keybindings available. Here are several of the more useful ones:
 -@code{<TAB>}: @code{magit-section-toggle}
 @itemize
 @item
-@code{<RET>}: @code{org-roam-visit-thing}
+@code{<RET>}: @code{org-roam-buffer-visit-thing}
 @end itemize
 
-@code{org-roam-visit-thing} is a placeholder command, that is replaced by
+@code{org-roam-buffer-visit-thing} is a placeholder command, that is replaced by
 section-specific commands such as @code{org-roam-node-visit}.
 
 @node Configuring what is displayed in the buffer
@@ -1990,7 +1990,7 @@ INITIAL-INPUT is the initial minibuffer prompt value. FILTER-FN
 is a function to filter out nodes: it takes a single argument (an
 @code{org-roam-node}), and when nil is returned the node will be
 filtered out.
-SORT-FN is a function to sort nodes. See @code{org-roam-node-sort-by-file-mtime}
+SORT-FN is a function to sort nodes. See @code{org-roam-node-read-sort-by-file-mtime}
 for an example sort function.
 If REQUIRE-MATCH, the minibuffer prompt will require a match.
 @end defun
@@ -2024,7 +2024,7 @@ instead. The exposed function to be used in extensions is @code{org-roam-capture
 
 Main entry point.
 GOTO and KEYS correspond to `org-capture' arguments.
-INFO is an alist for filling up Org-roam's capture templates.
+INFO is a plist for filling up Org-roam's capture templates.
 NODE is an `org-roam-node' construct containing information about the node.
 PROPS is a plist containing additional Org-roam properties for each template.
 TEMPLATES is a list of org-roam templates.

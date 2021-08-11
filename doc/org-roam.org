@@ -67,7 +67,7 @@ Org-roam provides these benefits over other tooling:
 
 Org-roam is a tool that will appear unfriendly to anyone unfamiliar with Emacs
 and Org-mode, but it is also extremely powerful to those willing to put effort
-inn mastering the intricacies. Org-roam stands on the shoulders of giants. Emacs
+in mastering the intricacies. Org-roam stands on the shoulders of giants. Emacs
 was first created in 1976, and remains the tool of choice for many for editing
 text and designing textual interfaces. The malleability of Emacs allowed the
 creation of Org-mode, an all-purpose plain-text system for maintaining TODO
@@ -134,7 +134,7 @@ A slip-box requires a method for quickly capturing ideas. These are called
 *fleeting notes*: they are simple reminders of information or ideas that will
 need to be processed later on, or trashed. This is typically accomplished using
 ~org-capture~ (see info:org#Capture), or using Org-roam's daily notes
-functionality (see [[id:4eae8552-95e1-4e4a-b7b7-2c53433730ea][Org-roam Dailies]]). This provides a central inbox for collecting
+functionality (see [[*Org-roam Dailies][Org-roam Dailies]]). This provides a central inbox for collecting
 thoughts, to be processed later into permanent notes.
 
 *Permanent notes*
@@ -300,7 +300,7 @@ is to use [[https://www.msys2.org/][MSYS2]] as at the time of this writing:
 1. Use the installer in the official website and install MSYS2
 2. Run MSYS2
 3. In the command-line tool, type the following and answer "Y" to proceed:
-   
+
    #+BEGIN_SRC bash
      pacman -S gcc
    #+END_SRC
@@ -308,7 +308,7 @@ is to use [[https://www.msys2.org/][MSYS2]] as at the time of this writing:
    Note that you do not need to manually set the PATH for MSYS2; the
 installer automatically takes care of it for you.
 
-4. Open Emacs and call ~M-x org-roam-setup~
+4. Open Emacs and call ~M-x org-roam-db-autosync-mode~
 
    This will automatically start compiling ~emacsql-sqlite~; you should see a
 message in minibuffer. It may take a while until compilation completes. Once
@@ -376,12 +376,12 @@ The ~file-truename~ function is only necessary when you use symbolic links
 inside ~org-roam-directory~: Org-roam does not resolve symbolic links.
 
 Next, we setup Org-roam to run functions on file changes to maintain cache
-consistency. This is achieved by running ~M-x org-roam-setup~. To ensure that
-Org-roam is available on startup, place this in your Emacs configuration:
+consistency. This is achieved by running ~M-x org-roam-db-autosync-mode~. To
+ensure that Org-roam is available on startup, place this in your Emacs
+configuration:
 
 #+begin_src emacs-lisp
-  (require 'org-roam)
-  (org-roam-setup)
+(org-roam-db-autosync-mode)
 #+end_src
 
 To build the cache manually, run ~M-x org-roam-db-sync~. Cache builds may
@@ -415,7 +415,8 @@ node. If you instead entered a title that does not exist, you will once again be
 brought through the node creation process.
 
 One can also conveniently insert links via the completion-at-point functions
-Org-roam provides (see [[id:70083bfd-d1e3-42b9-bf83-5b05708791c0][Completion]]).
+Org-roam provides (see [[*Completion][Completion]]).
+
 * Customizing Node Caching
 ** What to cache
 
@@ -495,9 +496,9 @@ keybindings available. Here are several of the more useful ones:
 - ~M-{N}~: ~magit-section-show-level-{N}-all~
 - ~n~: ~magit-section-forward~
 -~<TAB>~: ~magit-section-toggle~
-- ~<RET>~: ~org-roam-visit-thing~
+- ~<RET>~: ~org-roam-buffer-visit-thing~
 
-~org-roam-visit-thing~ is a placeholder command, that is replaced by
+~org-roam-buffer-visit-thing~ is a placeholder command, that is replaced by
 section-specific commands such as ~org-roam-node-visit~.
 
 ** Configuring what is displayed in the buffer
@@ -646,9 +647,6 @@ Org-roam also provides some functions to add or remove refs.
   Remove a ref from the node at point.
 
 * Completion
-:PROPERTIES:
-:ID:       70083bfd-d1e3-42b9-bf83-5b05708791c0
-:END:
 
 Completions for Org-roam are provided via ~completion-at-point~. Org-roam
 currently provides completions in two scenarios:
@@ -994,10 +992,10 @@ ARG may be any of the following values:
   2. a function accepting a single argument: the graph file path.
 
   ~nil~ uses ~view-file~ to view the graph.
-  
+
   If you are using WSL2 and would like to open the graph in Windows, you can use
   the second option to set the browser and network file path:
-  
+
   #+BEGIN_SRC emacs-lisp
   (setq org-roam-graph-viewer
       (lambda (file)
@@ -1032,9 +1030,6 @@ for customizable options.
   Example: ~'(("dir" . "back"))~
 
 * Org-roam Dailies
-:PROPERTIES:
-:ID:       4eae8552-95e1-4e4a-b7b7-2c53433730ea
-:END:
 
 Org-roam provides journaling capabilities akin to
 Org-journal with ~org-roam-dailies~.
@@ -1098,7 +1093,7 @@ There are also commands which allow you to use Emacs’s ~calendar~ to find the 
   Create an entry in the daily note for a date using the calendar.
 
   Prefer past dates, unless ~prefer-future~ is non-nil.
-  
+
   With a 'C-u' prefix or when ~goto~ is non-nil, go the note without
   creating an entry.
 
@@ -1415,7 +1410,7 @@ method to access nodes is ~org-roam-node-at-point~ and ~org-roam-node-read~:
   is a function to filter out nodes: it takes a single argument (an
   ~org-roam-node~), and when nil is returned the node will be
   filtered out.
-  SORT-FN is a function to sort nodes. See ~org-roam-node-sort-by-file-mtime~
+  SORT-FN is a function to sort nodes. See ~org-roam-node-read-sort-by-file-mtime~
   for an example sort function.
   If REQUIRE-MATCH, the minibuffer prompt will require a match.
 
@@ -1447,7 +1442,7 @@ instead. The exposed function to be used in extensions is ~org-roam-capture-~:
 
   Main entry point.
   GOTO and KEYS correspond to `org-capture' arguments.
-  INFO is an alist for filling up Org-roam's capture templates.
+  INFO is a plist for filling up Org-roam's capture templates.
   NODE is an `org-roam-node' construct containing information about the node.
   PROPS is a plist containing additional Org-roam properties for each template.
   TEMPLATES is a list of org-roam templates.
@@ -1531,7 +1526,7 @@ see the list.
 paren and run =M-x eval-last-sexp RET= or 2) Press =C-c C-c= with your cursor in
 an Org file code block (like =#+BEGIN_SRC emacs-lisp=).
 [fn:roam] To understand more about Roam, a collection of links are available in [[*Note-taking Workflows][Note-taking Workflows]].
- 
+
 # Local Variables:
 # eval: (require 'ol-info)
 # eval: (require 'ox-texinfo+ nil t)
