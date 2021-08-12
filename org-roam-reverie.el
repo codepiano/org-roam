@@ -86,6 +86,17 @@
                                       (cdr node)))
                      heading-nodes "\n")))))))
 
+(defun reverie-insert-dblock ()
+  "insert insert children nodes dblock"
+  (interactive)
+  (progn (newline)
+         (previous-line)
+         (insert "#+BEGIN: reverie-insert-children-nodes :parameter1 value1\n")
+         (newline)
+         (previous-line)
+         (insert "#+END")
+         (org-dblock-update)))
+
 (defun reverie-insert-children-nodes ()
   "insert subheading nodes"
   (interactive)
