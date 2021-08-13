@@ -31,6 +31,14 @@
          (org-id-get-create)
          (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
 
+(defun reverie-father-headline ()
+  "insert same level headline node"
+  (interactive)
+  (progn (org-insert-heading-respect-content)
+         (org-do-promote)
+         (org-id-get-create)
+         (org-entry-put nil org-roam-reverie-property-created-time (iso8601-format (current-time)))))
+
 (defun reverie-child-headline ()
   "insert next level headline node"
   (interactive)
