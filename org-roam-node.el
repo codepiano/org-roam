@@ -370,10 +370,12 @@ Display the buffer in the selected window.  With a prefix
 argument OTHER-WINDOW display the buffer in another window
 instead."
   (interactive (list (org-roam-node-at-point t) current-prefix-arg))
-  (let ((buf (org-roam-node-find-noselect node)))
-    (funcall (if other-window
-                 #'switch-to-buffer-other-window
-               #'pop-to-buffer-same-window) buf)))
+  (let ((buf (org-roam-node-find-noselect node))
+        (display-buffer-fn (if other-window
+                               #'switch-to-buffer-other-window
+                             #'pop-to-buffer-same-window)))
+    (funcall display-buffer-fn buf)
+    (when (org-invisible-p) (org-show-context))))
 
 ;;;###autoload
 (cl-defun org-roam-node-find (&optional other-window initial-input filter-fn &key templates)
@@ -607,7 +609,8 @@ Assumes that the cursor was put where the link is."
       (progn
         (when org-roam-link-auto-replace
           (org-roam-link-replace-at-point))
-        (org-id-goto (org-roam-node-id node)))
+        (org-mark-ring-push)
+        (org-roam-node-visit node))
     (org-roam-capture-
      :node (org-roam-node-create :title title-or-alias)
      :props '(:finalize find-file))))
@@ -900,9 +903,7 @@ FILTER-FN is a function to filter out nodes: it takes an `org-roam-node',
 and when nil is returned the node will be filtered out."
   (interactive)
   (let* ((node (org-roam-ref-read initial-input filter-fn)))
-    ;; REVIEW This can be refactored with `org-roam-node-visit'
-    (find-file (org-roam-node-file node))
-    (goto-char (org-roam-node-point node))))
+    (org-roam-node-visit node)))
 
 ;;;; Editing
 (defun org-roam-ref-add (ref)
