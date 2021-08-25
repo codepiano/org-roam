@@ -436,17 +436,11 @@ If UPDATE-P is non-nil, first remove the file in the database."
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
           (path (org-element-property :path link))
-<<<<<<< HEAD
           (isRef t)
           (properties (list :outline (condition-case nil
                                                      ;; This can error if link is not under any headline
                                                      (org-get-outline-path 'with-self 'use-cache)
                                                      (t nil))))
-=======
-          (properties (list :outline (ignore-errors
-                                       ;; This can error if link is not under any headline
-                                       (org-get-outline-path 'with-self 'use-cache))))
->>>>>>> org-roam-master
           (source (org-roam-id-at-point)))
       (when (and (boundp 'org-ref-cite-types)
                  (fboundp 'org-ref-split-and-strip-string)
