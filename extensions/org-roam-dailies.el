@@ -7,8 +7,8 @@
 ;;      Leo Vivier <leo.vivier+dev@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org-roam "2.0"))
+;; Version: 2.1.0
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org-roam "2.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -278,14 +278,12 @@ If FILE is not specified, use the current buffer's file-path."
 (defun org-roam-dailies-calendar--file-to-date (file)
   "Convert FILE to date.
 Return (MONTH DAY YEAR) or nil if not an Org time-string."
-  (condition-case nil
-      (progn
-        (cl-destructuring-bind (_ _ _ d m y _ _ _)
-            (org-parse-time-string
-             (file-name-sans-extension
-              (file-name-nondirectory file)))
-          (list m d y)))
-    (t nil)))
+  (ignore-errors
+    (cl-destructuring-bind (_ _ _ d m y _ _ _)
+        (org-parse-time-string
+         (file-name-sans-extension
+          (file-name-nondirectory file)))
+      (list m d y))))
 
 (defun org-roam-dailies-calendar-mark-entries ()
   "Mark days in the calendar for which a daily-note is present."

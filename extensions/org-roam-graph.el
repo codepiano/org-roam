@@ -5,8 +5,8 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
-;; Package-Requires: ((emacs "26.1") (org "9.4") (org-roam "2.0"))
+;; Version: 2.1.0
+;; Package-Requires: ((emacs "26.1") (org "9.4") (org-roam "2.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -207,7 +207,8 @@ WITH RECURSIVE
    connected_component(source) AS
   (SELECT dest FROM links_of WHERE source = $s1 UNION
    SELECT dest FROM links_of JOIN connected_component USING(source))
-SELECT source, dest, type FROM links WHERE source IN connected_component OR dest IN connected_component;"
+SELECT DISTINCT source, dest, type FROM links
+WHERE source IN connected_component OR dest IN connected_component;"
             "
 WITH RECURSIVE
   links_of(source, dest) AS
@@ -224,7 +225,7 @@ WITH RECURSIVE
     AND json_array_length(cc.trace) < $s2)),
   nodes(source) as (SELECT DISTINCT source
    FROM connected_component GROUP BY source ORDER BY min(json_array_length(trace)))
-SELECT source, dest, type FROM links WHERE source IN nodes OR dest IN nodes;")))
+SELECT DISTINCT source, dest, type FROM links WHERE source IN nodes OR dest IN nodes;")))
     (org-roam-db-query query id distance)))
 
 (defun org-roam-graph--dot-option (option &optional wrap-key wrap-val)

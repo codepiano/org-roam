@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
+;; Version: 2.1.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -93,7 +93,6 @@
 
 (eval-when-compile
   (require 'subr-x))
-(require 'org-roam-utils)
 (require 'org-roam-compat)
 
 ;;; Options
@@ -309,6 +308,7 @@ E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
 (provide 'org-roam)
 
 (cl-eval-when (load eval)
+  (require 'org-roam-utils)
   (require 'org-roam-db)
   (require 'org-roam-node)
   (require 'org-roam-capture)

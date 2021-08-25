@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
+;; Version: 2.1.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -75,6 +75,21 @@ It takes a single argument NODE, which is an `org-roam-node' construct."
   :type '(choice (const :tag "file-mtime" file-mtime)
                  (const :tag "file-atime" file-atime))
   :group 'org-roam)
+
+(defcustom org-roam-node-template-prefixes
+  '(("tags" . "#")
+    ("todo" . "t:"))
+  "Prefixes for each of the node's properties.
+This is used in conjunction with
+`org-roam-node-display-template': in minibuffer completions the
+node properties will be prefixed with strings in this variable,
+acting as a query language of sorts.
+
+For example, if a node has tags (\"foo\" \"bar\") and the alist
+has the entry (\"tags\" . \"#\"), these will appear as
+\"#foo #bar\"."
+  :group 'org-roam
+  :type  '(alist))
 
 (defcustom org-roam-ref-annotation-function #'org-roam-ref-read--annotation
   "This function used to attach annotations for `org-roam-ref-read'.
@@ -165,7 +180,7 @@ populated."
                                     (magit-section-up)
                                     (org-roam-node-at-point)))
         (t (org-with-wide-buffer
-            (org-back-to-heading-or-point-min)
+            (org-back-to-heading-or-point-min t)
             (while (and (not (org-roam-db-node-p))
                         (not (bobp)))
               (org-roam-up-heading-or-point-min))
@@ -354,28 +369,37 @@ GROUP BY id")))
                               all-titles)))))
 
 ;;;; Finders
-(defun org-roam-node-find-noselect (node)
-  "Navigate to the point for NODE, and return the buffer."
+(defun org-roam-node-find-noselect (node &optional force)
+  "Navigate to the point for NODE, and return the buffer.
+If NODE is already visited, this won't automatically move the
+point to the beginning of the NODE, unless FORCE is non-nil."
   (unless (org-roam-node-file node)
     (user-error "Node does not have corresponding file"))
   (let ((buf (find-file-noselect (org-roam-node-file node))))
     (with-current-buffer buf
-      (goto-char (org-roam-node-point node)))
+      (when (or force
+                (not (equal (org-roam-node-id node)
+                            (org-roam-id-at-point))))
+        (goto-char (org-roam-node-point node))))
     buf))
 
-(defun org-roam-node-visit (node &optional other-window)
-  "From the current buffer, visit NODE.
-
+(defun org-roam-node-visit (node &optional other-window force)
+  "From the current buffer, visit NODE. Return the visited buffer.
 Display the buffer in the selected window.  With a prefix
 argument OTHER-WINDOW display the buffer in another window
-instead."
-  (interactive (list (org-roam-node-at-point t) current-prefix-arg))
-  (let ((buf (org-roam-node-find-noselect node))
+instead.
+
+If NODE is already visited, this won't automatically move the
+point to the beginning of the NODE, unless FORCE is non-nil. In
+interactive calls FORCE always set to t."
+  (interactive (list (org-roam-node-at-point t) current-prefix-arg t))
+  (let ((buf (org-roam-node-find-noselect node 'force))
         (display-buffer-fn (if other-window
                                #'switch-to-buffer-other-window
                              #'pop-to-buffer-same-window)))
     (funcall display-buffer-fn buf)
-    (when (org-invisible-p) (org-show-context))))
+    (when (org-invisible-p) (org-show-context))
+    buf))
 
 ;;;###autoload
 (cl-defun org-roam-node-find (&optional other-window initial-input filter-fn &key templates)
@@ -454,50 +478,51 @@ The displayed title is formatted according to `org-roam-node-display-template'."
   (let ((candidate-main (org-roam-node-read--format-entry node (1- (frame-width)))))
     (cons (propertize candidate-main 'node node) node)))
 
-(defun org-roam-node-read--tags-to-str (tags)
-  "Convert list of TAGS into a string."
-  (mapconcat (lambda (s) (concat "#" s)) tags " "))
-
 (defun org-roam-node-read--format-entry (node width)
   "Formats NODE for display in the results list.
 WIDTH is the width of the results list.
 Uses `org-roam-node-display-template' to format the entry."
-  (let ((fmt (org-roam-node-read--process-display-format org-roam-node-display-template)))
+  (pcase-let ((`(,tmpl . ,tmpl-width)
+               (org-roam-node-read--process-display-format org-roam-node-display-template)))
     (org-roam-format-template
-     (car fmt)
+     tmpl
      (lambda (field _default-val)
-       (let* ((field (split-string field ":"))
-              (field-name (car field))
-              (field-width (cadr field))
-              (getter (intern (concat "org-roam-node-" field-name)))
-              (field-value (or (funcall getter node) "")))
-         (when (and (equal field-name "tags")
-                    field-value)
-           (setq field-value (org-roam-node-read--tags-to-str field-value)))
+       (pcase-let* ((`(,field-name ,field-width) (split-string field ":"))
+                    (getter (intern (concat "org-roam-node-" field-name)))
+                    (field-value (funcall getter node)))
          (when (and (equal field-name "file")
                     field-value)
            (setq field-value (file-relative-name field-value org-roam-directory)))
          (when (and (equal field-name "olp")
                     field-value)
            (setq field-value (string-join field-value " > ")))
-         (if (not field-width)
-             field-value
-           (setq field-width (string-to-number field-width))
-           (let ((display-string (truncate-string-to-width
-                                  field-value
-                                  (if (> field-width 0)
-                                      field-width
-                                    (- width (cdr fmt)))
-                                  0 ?\s)))
-             ;; Setting the display (which would be padded out to the field length) for an
-             ;; empty string results in an empty string and misalignment for candidates that
-             ;; don't have some field. This uses the actual display string, made of spaces
-             ;; when the field-value is "" so that we actually take up space.
-             (if (not (equal field-value ""))
-                 ;; Remove properties from the full candidate string, otherwise the display
-                 ;; formatting with pre-prioritized field-values gets messed up.
-                 (propertize (substring-no-properties field-value) 'display display-string)
-               display-string))))))))
+         (when (and field-value (not (listp field-value)))
+           (setq field-value (list field-value)))
+         (setq field-value (mapconcat
+                            (lambda (v)
+                              (concat (or (cdr (assoc field-name org-roam-node-template-prefixes))
+                                          "")
+                                      v))
+                            field-value " "))
+         (setq field-width (cond
+                            ((not field-width)
+                             field-width)
+                            ((string-equal field-width "*")
+                             (- width tmpl-width))
+                            ((>= (string-to-number field-width) 0)
+                             (string-to-number field-width))))
+         ;; Setting the display (which would be padded out to the field length) for an
+         ;; empty string results in an empty string and misalignment for candidates that
+         ;; don't have some field. This uses the actual display string, made of spaces
+         ;; when the field-value is "" so that we actually take up space.
+         (let ((display-string (if field-width
+                                   (truncate-string-to-width field-value field-width 0 ?\s)
+                                 field-value)))
+           (if (equal field-value "")
+               display-string
+             ;; Remove properties from the full candidate string, otherwise the display
+             ;; formatting with pre-prioritized field-values gets messed up.
+             (propertize (substring-no-properties field-value) 'display display-string))))))))
 
 (defun org-roam-node-read--process-display-format (format)
   "Pre-calculate minimal widths needed by the FORMAT string."
@@ -596,7 +621,7 @@ Assumes that the cursor was put where the link is."
         (cond
          ((org-roam-node-file node)
           (org-mark-ring-push)
-          (org-roam-node-visit node)
+          (org-roam-node-visit node nil 'force)
           t)
          (t nil))))))
 
@@ -610,7 +635,7 @@ Assumes that the cursor was put where the link is."
         (when org-roam-link-auto-replace
           (org-roam-link-replace-at-point))
         (org-mark-ring-push)
-        (org-roam-node-visit node))
+        (org-roam-node-visit node nil 'force))
     (org-roam-capture-
      :node (org-roam-node-create :title title-or-alias)
      :props '(:finalize find-file))))
@@ -631,7 +656,7 @@ Assumes that the cursor was put where the link is."
         (goto-char (org-element-property :begin link))
         (when (and (org-in-regexp org-link-any-re 1)
                    (string-equal type "roam")
-                   (setq node (org-roam-node-from-title-or-alias path)))
+                   (setq node (save-match-data (org-roam-node-from-title-or-alias path))))
           (replace-match (org-link-make-string
                           (concat "id:" (org-roam-node-id node))
                           (or desc path))))))))
@@ -802,7 +827,7 @@ If region is active, then use it instead of the node at point."
   "Convert current subtree at point to a node, and extract it into a new file."
   (interactive)
   (save-excursion
-    (org-back-to-heading-or-point-min)
+    (org-back-to-heading-or-point-min t)
     (when (bobp) (user-error "Already a top-level node"))
     (org-id-get-create)
     (save-buffer)
@@ -840,12 +865,34 @@ If region is active, then use it instead of the node at point."
 Recursively traverses up the headline tree to find the
 first encapsulating ID."
   (org-with-wide-buffer
-   (org-back-to-heading-or-point-min)
+   (org-back-to-heading-or-point-min t)
    (while (and (not (org-roam-db-node-p))
                (not (bobp)))
      (org-roam-up-heading-or-point-min))
    (when (org-roam-db-node-p)
      (org-id-get))))
+
+;;;###autoload
+(defun org-roam-update-org-id-locations (&rest directories)
+  "Scan Org-roam files to update `org-id' related state.
+This is like `org-id-update-id-locations', but will automatically
+use the currently bound `org-directory' and `org-roam-directory'
+along with DIRECTORIES (if any), where the lookup for files in
+these directories will be always recursive.
+
+Note: Org-roam doesn't have hard dependency on
+`org-id-locations-file' to lookup IDs for nodes that are stored
+in the database, but it still tries to properly integrates with
+`org-id'. This allows the user to cross-reference IDs outside of
+the current `org-roam-directory', and also link with \"id:\"
+links to headings/files within the current `org-roam-directory'
+that are excluded from identification in Org-roam as
+`org-roam-node's, e.g. with \"ROAM_EXCLUDE\" property."
+  (interactive)
+  (cl-loop with files for dir in (cons org-roam-directory directories)
+           for org-roam-directory = dir
+           nconc (org-roam-list-files) into files
+           finally (org-id-update-id-locations files org-roam-verbose)))
 
 ;;; Refs
 ;;;; Completing-read interface

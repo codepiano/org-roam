@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
+;; Version: 2.1.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -379,7 +379,8 @@ the same time:
 The preview content comes from FILE, and the link as at POINT.")
 
 (defun org-roam-preview-visit (file point &optional other-window)
-  "Visit FILE at POINT. With OTHER-WINDOW non-nil do so in another window.
+  "Visit FILE at POINT and return the visited buffer.
+With OTHER-WINDOW non-nil do so in another window.
 In interactive calls OTHER-WINDOW is set with
 `universal-argument'."
   (interactive (list (org-roam-buffer-file-at-point 'assert)
@@ -389,11 +390,12 @@ In interactive calls OTHER-WINDOW is set with
         (display-buffer-fn (if other-window
                                #'switch-to-buffer-other-window
                              #'pop-to-buffer-same-window)))
+    (funcall display-buffer-fn buf)
     (with-current-buffer buf
       (widen)
       (goto-char point))
-    (funcall display-buffer-fn buf)
-    (when (org-invisible-p) (org-show-context))))
+    (when (org-invisible-p) (org-show-context))
+    buf))
 
 (defun org-roam-preview-get-contents (file point)
   "Get preview content for FILE at POINT."
@@ -540,22 +542,20 @@ Sorts by title."
 
 (defun org-roam-reflinks-get (node)
   "Return the reflinks for NODE."
-  (let ((refs (org-roam-db-query [:select [ref] :from refs
-                                  :where (= node-id $s1)]
+  (let ((refs (org-roam-db-query [:select :distinct [refs:ref links:source links:pos links:properties]
+                                  :from refs
+                                  :left-join links
+                                  :where (= refs:node-id $s1)
+                                  :and (= links:dest refs:ref)]
                                  (org-roam-node-id node)))
         links)
-    (pcase-dolist (`(,ref) refs)
-      (pcase-dolist (`(,source-id ,pos ,properties) (org-roam-db-query
-                                                     [:select [source pos properties]
-                                                      :from links
-                                                      :where (= dest $s1)]
-                                                     ref))
-        (push (org-roam-populate
-               (org-roam-reflink-create
-                :source-node (org-roam-node-create :id source-id)
-                :ref ref
-                :point pos
-                :properties properties)) links)))
+    (pcase-dolist (`(,ref ,source-id ,pos ,properties) refs)
+      (push (org-roam-populate
+             (org-roam-reflink-create
+              :source-node (org-roam-node-create :id source-id)
+              :ref ref
+              :point pos
+              :properties properties)) links))
     links))
 
 (defun org-roam-reflinks-sort (a b)
@@ -593,7 +593,7 @@ Sorts by title."
   "A `magit-section' used by `org-roam-mode' to contain grep output.")
 
 (defun org-roam-grep-visit (file &optional other-window row col)
-  "Visits FILE. If ROW, move to the row, and if COL move to the COL.
+  "Visit FILE at row ROW (if any) and column COL (if any). Return the buffer.
 With OTHER-WINDOW non-nil (in interactive calls set with
 `universal-argument') display the buffer in another window
 instead."
@@ -605,6 +605,7 @@ instead."
         (display-buffer-fn (if other-window
                                #'switch-to-buffer-other-window
                              #'pop-to-buffer-same-window)))
+    (funcall display-buffer-fn buf)
     (with-current-buffer buf
       (widen)
       (goto-char (point-min))
@@ -612,8 +613,8 @@ instead."
         (forward-line (1- row)))
       (when col
         (forward-char (1- col))))
-    (funcall display-buffer-fn buf)
-    (when (org-invisible-p) (org-show-context))))
+    (when (org-invisible-p) (org-show-context))
+    buf))
 
 ;;;; Unlinked references
 (defvar org-roam-unlinked-references-result-re

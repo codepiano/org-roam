@@ -5,7 +5,7 @@
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
-;; Version: 2.0.0
+;; Version: 2.1.0
 ;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "2.90.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -436,11 +436,17 @@ If UPDATE-P is non-nil, first remove the file in the database."
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
           (path (org-element-property :path link))
+<<<<<<< HEAD
           (isRef t)
           (properties (list :outline (condition-case nil
                                                      ;; This can error if link is not under any headline
                                                      (org-get-outline-path 'with-self 'use-cache)
                                                      (t nil))))
+=======
+          (properties (list :outline (ignore-errors
+                                       ;; This can error if link is not under any headline
+                                       (org-get-outline-path 'with-self 'use-cache))))
+>>>>>>> org-roam-master
           (source (org-roam-id-at-point)))
       (when (and (boundp 'org-ref-cite-types)
                  (fboundp 'org-ref-split-and-strip-string)
