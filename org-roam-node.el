@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.1.0
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (magit-section "2.90.1"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -393,7 +393,7 @@ If NODE is already visited, this won't automatically move the
 point to the beginning of the NODE, unless FORCE is non-nil. In
 interactive calls FORCE always set to t."
   (interactive (list (org-roam-node-at-point t) current-prefix-arg t))
-  (let ((buf (org-roam-node-find-noselect node 'force))
+  (let ((buf (org-roam-node-find-noselect node force))
         (display-buffer-fn (if other-window
                                #'switch-to-buffer-other-window
                              #'pop-to-buffer-same-window)))

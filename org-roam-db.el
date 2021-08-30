@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.1.0
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "2.90.1"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (f "0.17.2") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -79,7 +79,7 @@ slow."
   :group 'org-roam)
 
 ;;; Variables
-(defconst org-roam-db-version 16)
+(defconst org-roam-db-version 17)
 
 ;; TODO Rename this
 (defconst org-roam--sqlite-available-p
@@ -167,6 +167,13 @@ The query is expected to be able to fail, in this situation, run HANDLER."
     (aliases
      ([(node-id :not-null)
        alias]
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+
+    (citations
+     ([(node-id :not-null)
+       (cite-key :not-null)
+       (pos :not-null)
+       properties]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
     (refs
@@ -286,13 +293,22 @@ If UPDATE-P is non-nil, first remove the file in the database."
          (dolist (fn fns)
            (funcall fn)))))))
 
-(defun org-roam-db-map-links (fns)
-  "Run FNS over all links in the current buffer."
+(defun org-roam-db-map-links (info fns)
+  "Run FNS over all links in the current buffer.
+INFO is the org-element parsed buffer."
   (org-with-point-at 1
-    (org-element-map (org-element-parse-buffer) 'link
+    (org-element-map info 'link
       (lambda (link)
         (dolist (fn fns)
           (funcall fn link))))))
+
+(defun org-roam-db-map-citations (info fns)
+  "Run FNS over all citations in the current buffer.
+INFO is the org-element parsed buffer."
+  (org-element-map info 'citation-reference
+    (lambda (cite)
+      (dolist (fn fns)
+        (funcall fn cite)))))
 
 (defun org-roam-db-insert-file-node ()
   "Insert the file-level node into the Org-roam cache."
@@ -311,9 +327,7 @@ If UPDATE-P is non-nil, first remove the file in the database."
                (scheduled nil)
                (deadline nil)
                (level 0)
-               (aliases (org-entry-get (point) "ROAM_ALIASES"))
                (tags org-file-tags)
-               (refs (org-entry-get (point) "ROAM_REFS"))
                (properties (org-entry-properties))
                (olp nil)
                (createdTimeProperty (assoc org-roam-reverie-property-created-time properties))
@@ -336,29 +350,8 @@ If UPDATE-P is non-nil, first remove the file in the database."
              (mapcar (lambda (tag)
                        (vector id (substring-no-properties tag)))
                      tags)))
-          (when aliases
-            (org-roam-db-query
-             [:insert :into aliases
-              :values $v1]
-             (mapcar (lambda (alias)
-                       (vector id alias))
-                     (split-string-and-unquote aliases))))
-          (when refs
-            (setq refs (split-string-and-unquote refs))
-            (let (rows)
-              (dolist (ref refs)
-                (if (string-match org-link-plain-re ref)
-                    (progn
-                      (push (vector id (match-string 2 ref)
-                                    (match-string 1 ref)) rows))
-                  (lwarn '(org-roam) :warning
-                         "%s:%s\tInvalid ref %s, skipping..."
-                         (buffer-file-name) (point) ref)))
-              (when rows
-                (org-roam-db-query
-                 [:insert :into refs
-                  :values $v1]
-                 rows)))))))))
+          (org-roam-db-insert-aliases)
+          (org-roam-db-insert-refs))))))
 
 (cl-defun org-roam-db-insert-node-data ()
   "Insert node data for headline at point into the Org-roam cache."
@@ -396,13 +389,14 @@ If UPDATE-P is non-nil, first remove the file in the database."
 
 (defun org-roam-db-insert-aliases ()
   "Insert aliases for node at point into Org-roam cache."
-  (when-let ((node-id (org-id-get))
-             (aliases (org-entry-get (point) "ROAM_ALIASES")))
+  (when-let* ((node-id (org-id-get))
+              (aliases (org-entry-get (point) "ROAM_ALIASES"))
+              (aliases (split-string-and-unquote aliases)))
     (org-roam-db-query [:insert :into aliases
                         :values $v1]
                        (mapcar (lambda (alias)
                                  (vector node-id alias))
-                               (split-string-and-unquote aliases)))))
+                               aliases))))
 
 (defun org-roam-db-insert-tags ()
   "Insert tags for node at point into Org-roam cache."
@@ -421,14 +415,17 @@ If UPDATE-P is non-nil, first remove the file in the database."
     (let (rows)
       (dolist (ref refs)
         (save-match-data
-          (if (string-match org-link-plain-re ref)
-              (progn
-                (push (vector node-id (match-string 2 ref) (match-string 1 ref)) rows))
-            (lwarn '(org-roam) :warning
-                   "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref))))
-      (org-roam-db-query [:insert :into refs
-                          :values $v1]
-                         rows))))
+          (cond ((string-equal (substring ref 0 1) "@")
+                 (push (vector node-id (substring ref 1) "cite") rows))
+                ((string-match org-link-plain-re ref)
+                 (push (vector node-id (match-string 2 ref) (match-string 1 ref)) rows))
+                (t
+                 (lwarn '(org-roam) :warning
+                        "%s:%s\tInvalid ref %s, skipping..." (buffer-file-name) (point) ref)))))
+      (when rows
+        (org-roam-db-query [:insert :into refs
+                            :values $v1]
+                           rows)))))
 
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
@@ -436,28 +433,43 @@ If UPDATE-P is non-nil, first remove the file in the database."
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
           (path (org-element-property :path link))
-          (isRef t)
-          (properties (list :outline (condition-case nil
-                                                     ;; This can error if link is not under any headline
-                                                     (org-get-outline-path 'with-self 'use-cache)
-                                                     (t nil))))
-          (source (org-roam-id-at-point)))
-      (when (and (boundp 'org-ref-cite-types)
+          (source (org-roam-id-at-point))
+          (properties (list :outline (ignore-errors
+                                       ;; This can error if link is not under any headline
+                                       (org-get-outline-path 'with-self 'use-cache)))))
+      ;; For Org-ref links, we need to split the path into the cite keys
+      (when (and source path)
+        (if (and (require 'org-ref nil 'noerror)
+                 (boundp 'org-ref-cite-types)
                  (fboundp 'org-ref-split-and-strip-string)
                  (member type org-ref-cite-types))
-        (setq isRef nil)
-        (setq path (org-ref-split-and-strip-string path)))
-      (unless (listp path)
-        (setq path (list path)))
-      (when (and source path)
-        (cond (isRef (org-roam-db-query [:insert :into links :values $v1]
-                                        (mapcar (lambda (p)
-                                                  (vector (point) source p type properties))
-                                                path)))
-              ((org-roam-reverie-node-exists-p dest) (org-roam-db-query
-                                                       [:insert :into links
-                                                                :values $v1]
-                                                       (vector (point) source (car path) type properties))))))))
+            (progn
+              (setq path (org-ref-split-and-strip-string path))
+              (org-roam-db-query
+               [:insert :into citations
+                :values $v1]
+               (mapcar (lambda (p) (vector source p (point) properties)) path)))
+
+          (if (org-roam-reverie-node-exists-p dest)
+            (org-roam-db-query
+               [:insert :into links
+                :values $v1]
+               (vector (point) source path type properties))))))))
+
+(defun org-roam-db-insert-citation (citation)
+  "Insert data for CITATION at current point into the Org-roam cache."
+  (save-excursion
+    (goto-char (org-element-property :begin citation))
+    (let ((key (org-element-property :key citation))
+          (source (org-roam-id-at-point))
+          (properties (list :outline (ignore-errors
+                                       ;; This can error if link is not under any headline
+                                       (org-get-outline-path 'with-self 'use-cache)))))
+      (when (and source key)
+        (org-roam-db-query
+         [:insert :into citations
+          :values $v1]
+         (vector source key (point) properties))))))
 
 ;;;; Fetching
 (defun org-roam-db--get-current-files ()
@@ -490,31 +502,31 @@ If UPDATE-P is non-nil, first remove the file in the database."
   (setq file-path (or file-path (buffer-file-name (buffer-base-buffer))))
   (let ((content-hash (org-roam-db--file-hash file-path))
         (db-hash (caar (org-roam-db-query [:select hash :from files
-                                                   :where (= file $s1)] file-path))))
+                                           :where (= file $s1)] file-path)))
+        info)
     (unless (string= content-hash db-hash)
       (org-roam-with-file file-path nil
-                          (save-excursion
-                            (org-set-regexps-and-options 'tags-only)
-                            (org-roam-db-clear-file)
-                            (org-roam-db-insert-file)
-                            (org-roam-db-insert-file-node)
-                            (setq org-outline-path-cache nil)
-                            (org-roam-db-map-nodes
-                              (list #'org-roam-db-insert-node-data
-                                    #'org-roam-db-insert-aliases
-                                    #'org-roam-db-insert-tags
-                                    #'org-roam-db-insert-refs))
-                            (setq org-outline-path-cache nil)
-                            (org-roam-db-map-links
-                              (list #'org-roam-db-insert-link)))))))
+        (save-excursion
+          (org-set-regexps-and-options 'tags-only)
+          (org-roam-db-clear-file)
+          (org-roam-db-insert-file)
+          (org-roam-db-insert-file-node)
+          (setq org-outline-path-cache nil)
+          (org-roam-db-map-nodes
+           (list #'org-roam-db-insert-node-data
+                 #'org-roam-db-insert-aliases
+                 #'org-roam-db-insert-tags
+                 #'org-roam-db-insert-refs))
+          (setq org-outline-path-cache nil)
+          (setq info (org-element-parse-buffer))
+          (org-roam-db-map-links
+           info
+           (list #'org-roam-db-insert-link))
+          (when (require 'org-cite nil 'noerror)
+            (org-roam-db-map-citations
+             info
+             (list #'org-roam-db-insert-citation))))))))
 
-;;;;; Predicating
-(defun org-roam-reverie-node-exists-p (id)
-  (if id
-    (org-roam-db-query [:select [id] :from nodes :where (= id $s1)] id)
-    nil))
-
-;;;;; Updating
 ;;;###autoload
 (defun org-roam-db-sync (&optional force)
   "Synchronize the cache state with the current Org files on-disk.
@@ -636,6 +648,12 @@ If UPDATE-P is non-nil, first remove the file in the database."
   "Print information about node at point."
   (interactive)
   (prin1 (org-roam-node-at-point)))
+
+;;;;; Predicating
+(defun org-roam-reverie-node-exists-p (id)
+  (if id
+    (org-roam-db-query [:select [id] :from nodes :where (= id $s1)] id)
+    nil))
 
 (provide 'org-roam-db)
 
