@@ -161,7 +161,8 @@ The query is expected to be able to fail, in this situation, run HANDLER."
        (deadline text)
        title
        properties
-       olp]
+       olp
+       (createdTime integer :not-null)]
       (:foreign-key [file] :references files [file] :on-delete :cascade)))
 
     (aliases
@@ -450,7 +451,7 @@ INFO is the org-element parsed buffer."
                 :values $v1]
                (mapcar (lambda (p) (vector source p (point) properties)) path)))
 
-          (if (org-roam-reverie-node-exists-p dest)
+          (if (org-roam-reverie-node-exists-p path)
             (org-roam-db-query
                [:insert :into links
                 :values $v1]
