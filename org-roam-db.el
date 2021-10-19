@@ -34,6 +34,26 @@
 (defvar org-outline-path-cache)
 
 ;;; Options
+(defcustom org-roam-database-connector 'sqlite
+  "The database connector used by Org-roam.
+This must be set before `org-roam' is loaded. To use an
+alternative connector you must install the respective package
+explicitly. When `sqlite', then use the `emacsql-sqlite' library
+that is being maintained in the same repository as `emacsql'
+itself. When `libsqlite3', then use the `emacsql-libsqlite3'
+library, which itself uses a module provided by the `sqlite3'
+package. This is still experimental. When `sqlite3', then use the
+`emacsql-sqlite3' library, which uses the official `sqlite3' cli
+tool, which is not recommended because it is not suitable to be
+used like this, but has the advantage that you likely don't need
+a compiler. See https://nullprogram.com/blog/2014/02/06/."
+  :package-version '(org-roam . "2.2.0")
+  :group 'forge
+  :type '(choice (const sqlite)
+                 (const libsqlite3)
+                 (const sqlite3)
+                 (symbol :tag "other")))
+
 (defcustom org-roam-db-location (expand-file-name "org-roam.db" user-emacs-directory)
   "The path to file where the Org-roam database is stored.
 
@@ -96,6 +116,22 @@ slow."
   (gethash (expand-file-name org-roam-directory)
            org-roam-db--connection))
 
+(defun org-roam-db--conn-fn ()
+  "Return the function for creating the database connection."
+  (cl-case org-roam-database-connector
+    (sqlite
+     (progn
+       (require 'emacsql-sqlite)
+       #'emacsql-sqlite))
+    (libsqlite3
+     (progn
+       (require 'emacsql-libsqlite3)
+       #'emacsql-libsqlite3))
+    (sqlite3
+     (progn
+       (require 'emacsql-sqlite3)
+       #'emacsql-sqlite3))))
+
 (defun org-roam-db ()
   "Entrypoint to the Org-roam sqlite database.
 Initializes and stores the database, and the database connection.
@@ -104,8 +140,9 @@ Performs a database upgrade when required."
                (emacsql-live-p (org-roam-db--get-connection)))
     (let ((init-db (not (file-exists-p org-roam-db-location))))
       (make-directory (file-name-directory org-roam-db-location) t)
-      (let ((conn (emacsql-sqlite org-roam-db-location)))
-        (set-process-query-on-exit-flag (emacsql-process conn) nil)
+      (let ((conn (funcall (org-roam-db--conn-fn) org-roam-db-location)))
+        (when-let ((process (emacsql-process conn)))
+          (set-process-query-on-exit-flag process nil))
         (puthash (expand-file-name org-roam-directory)
                  conn
                  org-roam-db--connection)
@@ -294,14 +331,37 @@ If UPDATE-P is non-nil, first remove the file in the database."
          (dolist (fn fns)
            (funcall fn)))))))
 
-(defun org-roam-db-map-links (info fns)
-  "Run FNS over all links in the current buffer.
-INFO is the org-element parsed buffer."
+(defun org-roam-db-map-links (fns)
+  "Run FNS over all links in the current buffer."
   (org-with-point-at 1
-    (org-element-map info 'link
-      (lambda (link)
-        (dolist (fn fns)
-          (funcall fn link))))))
+    (while (re-search-forward org-link-any-re nil :no-error)
+      ;; `re-search-forward' let the cursor one character after the link, we need to go backward one char to
+      ;; make the point be on the link.
+      (backward-char)
+      (let* ((element (org-element-context))
+             (type (org-element-type element))
+             link bounds)
+        (cond
+         ;; Links correctly recognized by Org Mode
+         ((eq type 'link)
+          (setq link element))
+         ;; Links in property drawers and lines starting with #+. Recall that, as for Org Mode v9.4.4, the
+         ;; org-element-type of links within properties drawers is "node-property" and for lines starting with
+         ;; #+ is "keyword".
+         ((and (or (eq type 'node-property)
+                   (eq type 'keyword))
+               (setq bounds (org-in-regexp org-link-any-re))
+               (setq link (buffer-substring-no-properties
+                           (car bounds)
+                           (cdr bounds))))
+          (with-temp-buffer
+            (delay-mode-hooks (org-mode))
+            (insert link)
+            (goto-char 1)
+            (setq link (org-element-context)))))
+        (when link
+          (dolist (fn fns)
+            (funcall fn link)))))))
 
 (defun org-roam-db-map-citations (info fns)
   "Run FNS over all citations in the current buffer.
@@ -507,26 +567,27 @@ INFO is the org-element parsed buffer."
         info)
     (unless (string= content-hash db-hash)
       (org-roam-with-file file-path nil
-        (save-excursion
-          (org-set-regexps-and-options 'tags-only)
-          (org-roam-db-clear-file)
-          (org-roam-db-insert-file)
-          (org-roam-db-insert-file-node)
-          (setq org-outline-path-cache nil)
-          (org-roam-db-map-nodes
-           (list #'org-roam-db-insert-node-data
-                 #'org-roam-db-insert-aliases
-                 #'org-roam-db-insert-tags
-                 #'org-roam-db-insert-refs))
-          (setq org-outline-path-cache nil)
-          (setq info (org-element-parse-buffer))
-          (org-roam-db-map-links
-           info
-           (list #'org-roam-db-insert-link))
-          (when (require 'org-cite nil 'noerror)
-            (org-roam-db-map-citations
-             info
-             (list #'org-roam-db-insert-citation))))))))
+        (emacsql-with-transaction (org-roam-db)
+          (save-excursion
+            (org-set-regexps-and-options 'tags-only)
+            (org-roam-db-clear-file)
+            (org-roam-db-insert-file)
+            (org-roam-db-insert-file-node)
+            (setq org-outline-path-cache nil)
+            (org-roam-db-map-nodes
+             (list #'org-roam-db-insert-node-data
+                   #'org-roam-db-insert-aliases
+                   #'org-roam-db-insert-tags
+                   #'org-roam-db-insert-refs))
+            (setq org-outline-path-cache nil)
+            (setq info (org-element-parse-buffer))
+            (org-roam-db-map-links
+             (list #'org-roam-db-insert-link))
+            (when (fboundp 'org-cite-insert)
+              (require 'oc)             ;ensure feature is loaded
+              (org-roam-db-map-citations
+               info
+               (list #'org-roam-db-insert-citation)))))))))
 
 ;;;###autoload
 (defun org-roam-db-sync (&optional force)

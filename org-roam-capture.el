@@ -100,7 +100,7 @@ contains a list, where:
   - The second element indicates the location of the captured node.
   - And the rest of the list indicate the prefilled template, that will be
     inserted and the position of the point will be adjusted for.
-    This behavior various from type to type.
+    This behavior varies from type to type.
 
 The following options are supported for the :target property:
 
@@ -468,8 +468,11 @@ capture target."
   (let ((id (cond ((run-hook-with-args-until-success 'org-roam-capture-preface-hook))
                   (t (org-roam-capture--setup-target-location)))))
     (org-roam-capture--adjust-point-for-capture-type)
-    (org-capture-put :template
-                     (org-roam-capture--fill-template (org-capture-get :template)))
+    (let ((template (org-capture-get :template)))
+      (when (stringp template)
+        (org-capture-put
+         :template
+         (org-roam-capture--fill-template template))))
     (org-roam-capture--put :id id)
     (org-roam-capture--put :finalize (or (org-capture-get :finalize)
                                          (org-roam-capture--get :finalize)))))
@@ -741,7 +744,7 @@ also run Org-capture's template expansion."
                   (funcall node-fn org-roam-capture--node))
                  ((plist-get org-roam-capture--info ksym)
                   (plist-get org-roam-capture--info ksym))
-                 (t (let ((r (completing-read (format "%s: " key) nil nil nil default-val)))
+                 (t (let ((r (read-from-minibuffer (format "%s: " key) default-val)))
                       (plist-put org-roam-capture--info ksym r)
                       r))))))))
 

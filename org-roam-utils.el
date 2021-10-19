@@ -68,6 +68,7 @@ Kills the buffer if KEEP-BUF-P is nil, and FILE is not yet visited."
   (declare (indent 2) (debug t))
   `(let* (new-buf
           (auto-mode-alist nil)
+          (find-file-hook nil)
           (buf (or (and (not ,file)
                         (current-buffer)) ;If FILE is nil, use current buffer
                    (find-buffer-visiting ,file) ; If FILE is already visited, find buffer
@@ -127,9 +128,13 @@ value (possibly nil). Adapted from `s-format'."
                  (let ((v (progn
                             (set-match-data saved-match-data)
                             (funcall replacer var default-val))))
-                   (if v (format "%s" v) (signal 'org-roam-format-resolve md)))
+                   (if v
+                       (format (apply #'propertize "%s" (text-properties-at 0 var)) v)
+                     (signal 'org-roam-format-resolve md)))
                (set-match-data replacer-match-data))))
-         template
+         (if (functionp template)
+             (funcall template)
+           template)
          ;; Need literal to make sure it works
          t t)
       (set-match-data saved-match-data))))
