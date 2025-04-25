@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.2.2
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (magit-section "3.0.0"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.6") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -32,6 +32,7 @@
 ;; interactively.
 ;;
 ;;; Code:
+(require 'crm)
 (require 'org-roam)
 
 ;;; Options
@@ -111,6 +112,12 @@ has the entry (\"tags\" . \"#\"), these will appear as
 It takes a single argument REF, which is a propertized string."
   :group 'org-roam
   :type  '(function))
+
+(defcustom org-roam-ref-prompt-function nil
+  "Function to prompt for ref strings in `org-roam-ref-add'.
+Should take no arguments, prompt the user, and return a string."
+  :group 'org-roam
+  :type 'function)
 
 ;;;; Completion-at-point
 (defcustom org-roam-completion-everywhere nil
@@ -210,6 +217,10 @@ This path is relative to `org-roam-directory'."
     (_
      (org-roam-node-title node))))
 
+(cl-defmethod org-roam-node-category ((node org-roam-node))
+  "Return the category for NODE."
+  (cdr (assoc-string "CATEGORY" (org-roam-node-properties node))))
+
 ;;; Nodes
 ;;;; Getters
 (defun org-roam-node-at-point (&optional assert)
@@ -226,11 +237,10 @@ populated."
         (t (org-with-wide-buffer
             (while (not (or (org-roam-db-node-p)
                             (bobp)
-                            ;; Handle case where top-level is a heading
-                            (= (funcall outline-level)
-                               (save-excursion
-                                 (org-roam-up-heading-or-point-min)
-                                 (funcall outline-level)))))
+                            (eq (funcall outline-level)
+                                (save-excursion
+                                  (org-roam-up-heading-or-point-min)
+                                  (funcall outline-level)))))
               (org-roam-up-heading-or-point-min))
             (when-let ((id (org-id-get)))
               (org-roam-populate
@@ -247,17 +257,21 @@ Return nil if a node with ID does not exist."
                                     id)) 0)
     (org-roam-populate (org-roam-node-create :id id))))
 
-(defun org-roam-node-from-title-or-alias (s)
+(defun org-roam-node-from-title-or-alias (s &optional nocase)
   "Return an `org-roam-node' for the node with title or alias S.
 Return nil if the node does not exist.
-Throw an error if multiple choices exist."
+Throw an error if multiple choices exist.
+
+If NOCASE is non-nil, the query is case insensitive.  It is case sensitive otherwise."
   (let ((matches (seq-uniq
                   (append
-                   (org-roam-db-query [:select [id] :from nodes
-                                       :where (= title $s1)]
+                   (org-roam-db-query (vconcat [:select [id] :from nodes
+                                                :where (= title $s1)]
+                                               (if nocase [ :collate NOCASE ]))
                                       s)
-                   (org-roam-db-query [:select [node-id] :from aliases
-                                       :where (= alias $s1)]
+                   (org-roam-db-query (vconcat [:select [node-id] :from aliases
+                                                :where (= alias $s1)]
+                                               (if nocase [ :collate NOCASE ]))
                                       s)))))
     (cond
      ((seq-empty-p matches)
@@ -296,7 +310,8 @@ Return nil if there's no node with such REF."
 Uses the ID, and fetches remaining details from the database.
 This can be quite costly: avoid, unless dealing with very few
 nodes."
-  (when-let ((node-info (car (org-roam-db-query [:select [file level pos todo priority
+  (when-let ((node-info (car (org-roam-db-query [:select [
+                                                          file level pos todo priority
                                                           scheduled deadline title properties olp]
                                                  :from nodes
                                                  :where (= id $s1)
@@ -404,8 +419,9 @@ FROM
   GROUP BY id, tags )
 GROUP BY id")))
     (cl-loop for row in rows
-             append (pcase-let* ((`(,id ,file ,file-title ,level ,todo ,pos ,priority ,scheduled ,deadline
-                                        ,title ,properties ,olp ,atime ,mtime ,tags ,aliases ,refs)
+             append (pcase-let* ((`(
+                                    ,id ,file ,file-title ,level ,todo ,pos ,priority ,scheduled ,deadline
+                                    ,title ,properties ,olp ,atime ,mtime ,tags ,aliases ,refs)
                                   row)
                                  (all-titles (cons title aliases)))
                       (mapcar (lambda (temp-title)
@@ -431,12 +447,11 @@ GROUP BY id")))
 ;;;; Finders
 (defun org-roam-node-marker (node)
   "Get the marker for NODE."
-  (unwind-protect
-      (let* ((file (org-roam-node-file node))
-             (buffer (or (find-buffer-visiting file)
-                         (find-file-noselect file))))
-        (with-current-buffer buffer
-          (move-marker (make-marker) (org-roam-node-point node) buffer)))))
+  (let* ((file (org-roam-node-file node))
+         (buffer (or (find-buffer-visiting file)
+                     (find-file-noselect file))))
+    (with-current-buffer buffer
+      (move-marker (make-marker) (org-roam-node-point node) buffer))))
 
 (defun org-roam-node-open (node &optional cmd force)
   "Go to the node NODE.
@@ -463,7 +478,7 @@ NODE, unless FORCE is non-nil."
                           (org-roam-id-at-point))))
       (goto-char m))
     (move-marker m nil))
-  (org-show-context))
+  (org-fold-show-context))
 
 (defun org-roam-node-visit (node &optional other-window force)
   "From the current buffer, visit NODE. Return the visited buffer.
@@ -770,7 +785,8 @@ We use this as a substitute for `org-link-bracket-re', because
   "Complete \"roam:\" link at point to an existing Org-roam node."
   (let (roam-p start end)
     (when (org-in-regexp org-roam-bracket-completion-re 1)
-      (setq roam-p (not (string-blank-p (match-string 1)))
+      (setq roam-p (not (or (org-in-src-block-p)
+                            (string-blank-p (match-string 1))))
             start (match-beginning 2)
             end (match-end 2))
       (list start end
@@ -792,6 +808,7 @@ outside of the bracket syntax for links (i.e. \"[[roam:|]]\"),
 hence \"everywhere\"."
   (when (and org-roam-completion-everywhere
              (thing-at-point 'word)
+             (not (org-in-src-block-p))
              (not (save-match-data (org-in-regexp org-link-any-re))))
     (let ((bounds (bounds-of-thing-at-point 'word)))
       (list (car bounds) (cdr bounds)
@@ -863,6 +880,7 @@ node."
   (org-with-point-at 1
     (let ((title (nth 4 (org-heading-components)))
           (tags (org-get-tags)))
+      (org-fold-show-all)
       (kill-whole-line)
       (org-roam-end-of-meta-data t)
       (insert "#+title: " title "\n")
@@ -871,14 +889,15 @@ node."
       (org-roam-db-update-file))))
 
 ;;;###autoload
-(defun org-roam-refile ()
-  "Refile node at point to an Org-roam node.
+(defun org-roam-refile (node)
+  "Refile node at point to an org-roam NODE.
+
 If region is active, then use it instead of the node at point."
-  (interactive)
+  (interactive
+   (list (org-roam-node-read nil nil nil 'require-match)))
   (let* ((regionp (org-region-active-p))
          (region-start (and regionp (region-beginning)))
          (region-end (and regionp (region-end)))
-         (node (org-roam-node-read nil nil nil 'require-match))
          (file (org-roam-node-file node))
          (nbuf (or (find-buffer-visiting file)
                    (find-file-noselect file)))
@@ -922,7 +941,7 @@ If region is active, then use it instead of the node at point."
         (if (buffer-file-name)
             (delete-file (buffer-file-name)))
         (set-buffer-modified-p nil)
-        ;; In this was done during capture, abort the capture process.
+        ;; If this was done during capture, abort the capture process.
         (when (and org-capture-mode
                    (buffer-base-buffer (current-buffer)))
           (org-capture-kill))
@@ -1032,11 +1051,15 @@ and when nil is returned the node will be filtered out."
 ;;;; Editing
 (defun org-roam-ref-add (ref)
   "Add REF to the node at point."
-  (interactive "sRef: ")
+  (interactive `(,(if org-roam-ref-prompt-function
+                      (funcall org-roam-ref-prompt-function)
+                    (read-string "Ref: "))))
   (let ((node (org-roam-node-at-point 'assert)))
     (save-excursion
       (goto-char (org-roam-node-point node))
-      (org-roam-property-add "ROAM_REFS" ref))))
+      (org-roam-property-add "ROAM_REFS" (if (member " " (string-to-list ref))
+                                             (concat "\"" ref "\"")
+                                           ref)))))
 
 (defun org-roam-ref-remove (&optional ref)
   "Remove a REF from the node at point."
@@ -1064,7 +1087,8 @@ and when nil is returned the node will be filtered out."
 (defun org-roam-tag-add (tags)
   "Add TAGS to the node at point."
   (interactive
-   (list (completing-read-multiple "Tag: " (org-roam-tag-completions))))
+   (list (let ((crm-separator "[ 	]*:[ 	]*"))
+           (completing-read-multiple "Tag: " (org-roam-tag-completions)))))
   (let ((node (org-roam-node-at-point 'assert)))
     (save-excursion
       (goto-char (org-roam-node-point node))

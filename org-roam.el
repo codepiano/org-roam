@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.2.2
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "3.0.0"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.6") (emacsql "4.1.0") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -80,6 +80,9 @@
 (require 'magit-section)
 
 (require 'emacsql)
+;; REVIEW: is this require needed?
+;; emacsql-sqlite provides a common interface to an emacsql SQLite backend (e.g. emacs-sqlite-builtin)
+;; not to be confused with a backend itself named emacsql-sqlite that existed in emacsql < 4.0.
 (require 'emacsql-sqlite)
 
 (require 'org)
@@ -138,7 +141,7 @@ responsibility to ensure that."
   :group 'org-roam)
 
 (defcustom org-roam-file-exclude-regexp (list org-attach-id-dir)
-  "Files matching this regular expression are excluded from the Org-roam."
+  "Files matching this regular expression or list of regular expressions are excluded from the Org-roam."
   :type '(choice
           (repeat
            (string :tag "Regular expression matching files to ignore"))
@@ -152,36 +155,46 @@ responsibility to ensure that."
     '(find fd fdfind rg))
   "Commands that will be used to find Org-roam files.
 
-It should be a list of symbols or cons cells representing any of the following
-supported file search methods.
+It should be a list of symbols or cons cells representing any of
+the following supported file search methods.
 
-The commands will be tried in order until an executable for a command is found.
-The Elisp implementation is used if no command in the list is found.
+The commands will be tried in order until an executable for a
+command is found. The Elisp implementation is used if no command
+in the list is found.
 
   `find'
+
     Use find as the file search method.
     Example command:
-    find /path/to/dir -type f \( -name \"*.org\" -o -name \"*.org.gpg\" \)
+      find /path/to/dir -type f \
+        \( -name \"*.org\" -o -name \"*.org.gpg\" -name \"*.org.age\" \)
 
   `fd'
+
     Use fd as the file search method.
-    Example command: fd /path/to/dir/ --type file -e \".org\" -e \".org.gpg\"
+    Example command:
+      fd /path/to/dir/ --type file -e \".org\" -e \".org.gpg\" -e \".org.age\"
 
   `fdfind'
+
     Same as `fd'. It's an alias that used in some OSes (e.g. Debian, Ubuntu)
 
   `rg'
-    Use ripgrep as the file search method.
-    Example command: rg /path/to/dir/ --files -g \"*.org\" -g \"*.org.gpg\"
 
-By default, `executable-find' will be used to look up the path to the
-executable. If a custom path is required, it can be specified together with the
-method symbol as a cons cell. For example: '(find (rg . \"/path/to/rg\"))."
-  :type '(set (const :tag "find" find)
-              (const :tag "fd" fd)
-              (const :tag "fdfind" fdfind)
-              (const :tag "rg" rg)
-              (const :tag "elisp" nil)))
+    Use ripgrep as the file search method.
+    Example command:
+       rg /path/to/dir/ --files -g \"*.org\" -g \"*.org.gpg\" -g \"*.org.age\"
+
+By default, `executable-find' will be used to look up the path to
+the executable. If a custom path is required, it can be specified
+together with the method symbol as a cons cell. For example:
+\\='(find (rg . \"/path/to/rg\"))."
+  :type '(set
+          (const :tag "find" find)
+          (const :tag "fd" fd)
+          (const :tag "fdfind" fdfind)
+          (const :tag "rg" rg)
+          (const :tag "elisp" nil)))
 
 ;;; Library
 (defun org-roam-file-p (&optional file)
@@ -196,7 +209,8 @@ FILE is an Org-roam file if:
     (let* ((path (or file (buffer-file-name (buffer-base-buffer))))
            (relative-path (file-relative-name path org-roam-directory))
            (ext (org-roam--file-name-extension path))
-           (ext (if (string= ext "gpg")
+           (ext (if (or (string= ext "gpg")
+                        (string= ext "age"))
                     (org-roam--file-name-extension (file-name-sans-extension path))
                   ext))
            (org-roam-dir-p (org-roam-descendant-of-p path org-roam-directory))
@@ -290,7 +304,8 @@ If no files are found, an empty list is returned."
 E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
   (cl-loop for e in exts
            append (list (format "\"*.%s\"" e)
-                        (format "\"*.%s.gpg\"" e))))
+                        (format "\"*.%s.gpg\"" e)
+                        (format "\"*.%s.age\"" e))))
 
 (defun org-roam--list-files-find (executable dir)
   "Return all Org-roam files under DIR, using \"find\", provided as EXECUTABLE."
@@ -311,8 +326,9 @@ E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
 (defun org-roam--list-files-rg (executable dir)
   "Return all Org-roam files under DIR, using \"rg\", provided as EXECUTABLE."
   (let* ((globs (org-roam--list-files-search-globs org-roam-file-extensions))
-         (command (string-join `(,executable "-L" ,dir "--files"
-                                             ,@(mapcar (lambda (glob) (concat "-g " glob)) globs)) " ")))
+         (command (string-join `(
+                                 ,executable "-L" ,dir "--files"
+                                 ,@(mapcar (lambda (glob) (concat "-g " glob)) globs)) " ")))
     (org-roam--shell-command-files command)))
 
 (declare-function org-roam--directory-files-recursively "org-roam-compat")
@@ -321,7 +337,7 @@ E.g. (\".org\") => (\"*.org\" \"*.org.gpg\")"
   "Return all Org-roam files under DIR, using Elisp based implementation."
   (let ((regex (concat "\\.\\(?:"(mapconcat
                                   #'regexp-quote org-roam-file-extensions
-                                  "\\|" )"\\)\\(?:\\.gpg\\)?\\'"))
+                                  "\\|" )"\\)\\(?:\\.gpg\\|\\.age\\)?\\'"))
         result)
     (dolist (file (org-roam--directory-files-recursively dir regex nil nil t) result)
       (when (and (file-readable-p file)

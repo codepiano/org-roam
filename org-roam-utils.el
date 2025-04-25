@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.2.2
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.6"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -72,11 +72,10 @@ Like `string-equal', but case-insensitive."
 (defun org-roam-whitespace-content (s)
   "Return the whitespace content at the end of S."
   (with-temp-buffer
-    (let ((c 0))
-      (insert s)
-      (skip-chars-backward " \t\n")
-      (buffer-substring-no-properties
-       (point) (point-max)))))
+    (insert s)
+    (skip-chars-backward " \t\n")
+    (buffer-substring-no-properties
+     (point) (point-max))))
 
 (defun org-roam-strip-comments (s)
   "Strip Org comments from string S."
@@ -85,7 +84,8 @@ Like `string-equal', but case-insensitive."
     (goto-char (point-min))
     (while (not (eobp))
       (if (org-at-comment-p)
-          (delete-region (point-at-bol) (progn (forward-line) (point)))
+          (delete-region (line-beginning-position)
+                         (progn (forward-line) (point)))
         (forward-line)))
     (buffer-string)))
 
@@ -120,7 +120,7 @@ SPEC is a list, as per `dolist'."
 ;;; File utilities
 (defun org-roam-descendant-of-p (a b)
   "Return t if A is descendant of B."
-  (unless (equal (file-truename a) (file-truename b))
+  (unless (and a b (equal (file-truename a) (file-truename b)))
     (string-prefix-p (replace-regexp-in-string "^\\([A-Za-z]\\):" 'downcase (expand-file-name b) t t)
                      (replace-regexp-in-string "^\\([A-Za-z]\\):" 'downcase (expand-file-name a) t t))))
 
@@ -227,38 +227,11 @@ Like `org-fontify-like-in-org-mode', but supports `org-ref'."
   ;; `org-fontify-like-in-org-mode' here
   (with-temp-buffer
     (insert s)
-    (let ((org-ref-buffer-hacked t)
-          (org-fold-core-style 'overlays))
+    (let ((org-ref-buffer-hacked t))
       (org-mode)
+      (setq-local org-fold-core-style 'overlays)
       (font-lock-ensure)
       (buffer-string))))
-
-;;;; Shielding regions
-(defface org-roam-shielded
-  '((t :inherit (warning)))
-  "Face for regions that are shielded (marked as read-only).
-This face is used on the region target by org-roam-insertion
-during an `org-roam-capture'."
-  :group 'org-roam-faces)
-
-(defun org-roam-shield-region (beg end)
-  "Shield region against modifications.
-BEG and END are markers for the beginning and end regions.
-REGION must be a cons-cell containing the marker to the region
-beginning and maximum values."
-  (add-text-properties beg end
-                       '(font-lock-face org-roam-shielded
-                                        read-only t)
-                       (marker-buffer beg)))
-
-(defun org-roam-unshield-region (beg end)
-  "Unshield the shielded REGION.
-BEG and END are markers for the beginning and end regions."
-  (let ((inhibit-read-only t))
-    (remove-text-properties beg end
-                            '(font-lock-face org-roam-shielded
-                                             read-only t)
-                            (marker-buffer beg))))
 
 ;;; Org-mode utilities
 ;;;; Motions
@@ -476,8 +449,10 @@ See <https://github.com/raxod502/straight.el/issues/520>."
                       (quit "N/A"))))
     (insert (format "- Org: %s\n" (org-version nil 'full)))
     (insert (format "- Org-roam: %s" (org-roam-version)))
-    (insert (format "- sqlite-connector: %s" org-roam-database-connector))))
-
+    (insert (format "- sqlite-connector: %s"
+                    (if-let ((conn (org-roam-db--get-connection)))
+                        (eieio-object-class conn)
+                      "not connected")))))
 
 (provide 'org-roam-utils)
 ;;; org-roam-utils.el ends here

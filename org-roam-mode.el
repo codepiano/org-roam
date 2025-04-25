@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.2.2
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "3.0.0"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.6") (emacsql "4.1.0") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -42,8 +42,8 @@
 (defcustom org-roam-mode-sections (list #'org-roam-backlinks-section
                                         #'org-roam-reflinks-section)
   "A list of sections for the `org-roam-mode' based buffers.
-Each section is a function that is passed the an `org-roam-node'
-for which the section will be constructed for as the first
+Each section is a function that is passed the `org-roam-node'
+for which the section will be constructed as the first
 argument. Normally this node is `org-roam-buffer-current-node'.
 The function may also accept other optional arguments. Each item
 in the list is either:
@@ -319,7 +319,7 @@ To toggle its display use `org-roam-buffer-toggle' command.")
 
 (define-inline org-roam-buffer--visibility ()
   "Return the current visibility state of the persistent `org-roam-buffer'.
-Valid states are 'visible, 'exists and 'none."
+Valid states are `visible', `exists' and `none'."
   (declare (side-effect-free t))
   (inline-quote
    (cond
@@ -441,7 +441,7 @@ In interactive calls OTHER-WINDOW is set with
     (with-current-buffer buf
       (widen)
       (goto-char point))
-    (when (org-invisible-p) (org-show-context))
+    (when (org-invisible-p) (org-fold-show-context))
     buf))
 
 (defun org-roam-preview-default-function ()
@@ -514,19 +514,28 @@ Sorts by title."
   (string< (org-roam-node-title (org-roam-backlink-source-node a))
            (org-roam-node-title (org-roam-backlink-source-node b))))
 
-(cl-defun org-roam-backlinks-section (node &key (unique nil))
+(cl-defun org-roam-backlinks-section (node &key (unique nil) (show-backlink-p nil)
+                                           (section-heading "Backlinks:"))
   "The backlinks section for NODE.
 
 When UNIQUE is nil, show all positions where references are found.
-When UNIQUE is t, limit to unique sources."
+When UNIQUE is t, limit to unique sources.
+
+When SHOW-BACKLINK-P is not null, only show backlinks for which
+this predicate is not nil.
+
+SECTION-HEADING is the string used as a heading for the backlink section."
   (when-let ((backlinks (seq-sort #'org-roam-backlinks-sort (org-roam-backlinks-get node :unique unique))))
     (magit-insert-section (org-roam-backlinks)
-      (magit-insert-heading "Backlinks:")
+      (magit-insert-heading section-heading)
       (dolist (backlink backlinks)
-        (org-roam-node-insert-section
-         :source-node (org-roam-backlink-source-node backlink)
-         :point (org-roam-backlink-point backlink)
-         :properties (org-roam-backlink-properties backlink)))
+        (when (or (null show-backlink-p)
+                  (and (not (null show-backlink-p))
+                       (funcall show-backlink-p backlink)))
+          (org-roam-node-insert-section
+           :source-node (org-roam-backlink-source-node backlink)
+           :point (org-roam-backlink-point backlink)
+           :properties (org-roam-backlink-properties backlink))))
       (insert ?\n))))
 
 ;;;; Reflinks
@@ -621,7 +630,7 @@ instead."
         (forward-line (1- row)))
       (when col
         (forward-char (1- col))))
-    (when (org-invisible-p) (org-show-context))
+    (when (org-invisible-p) (org-fold-show-context))
     buf))
 
 ;;;; Unlinked references
@@ -649,23 +658,28 @@ This is the ROW within FILE."
        (end-of-line)
        (point)))))
 
+(defun org-roam-unlinked-references--rg-command (titles)
+  "Return the ripgrep command searching for TITLES."
+  (concat "rg --follow --only-matching --vimgrep --pcre2 --ignore-case "
+          (mapconcat (lambda (glob) (concat "--glob " glob))
+                     (org-roam--list-files-search-globs org-roam-file-extensions)
+                     " ")
+          (format " '\\[([^[]]++|(?R))*\\]%s' "
+                  (mapconcat (lambda (title)
+                               (format "|(\\b%s\\b)" (shell-quote-argument title)))
+                             titles ""))
+          (shell-quote-argument org-roam-directory)))
+
 (defun org-roam-unlinked-references-section (node)
   "The unlinked references section for NODE.
 References from FILE are excluded."
   (when (and (executable-find "rg")
+             (org-roam-node-title node)
              (not (string-match "PCRE2 is not available"
                                 (shell-command-to-string "rg --pcre2-version"))))
     (let* ((titles (cons (org-roam-node-title node)
                          (org-roam-node-aliases node)))
-           (rg-command (concat "rg -L -o --vimgrep -P -i "
-                               (mapconcat (lambda (glob) (concat "-g " glob))
-                                          (org-roam--list-files-search-globs org-roam-file-extensions)
-                                          " ")
-                               (format " '\\[([^[]]++|(?R))*\\]%s' "
-                                       (mapconcat (lambda (title)
-                                                    (format "|(\\b%s\\b)" (shell-quote-argument title)))
-                                                  titles ""))
-                               org-roam-directory))
+           (rg-command (org-roam-unlinked-references--rg-command titles))
            (results (split-string (shell-command-to-string rg-command) "\n"))
            f row col match)
       (magit-insert-section (unlinked-references)

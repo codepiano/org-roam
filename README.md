@@ -153,9 +153,8 @@ dependencies. These include:
 - dash
 - f
 - s
-- org (9.4 is the minimal required version!)
+- org (9.6 is the minimum required version!)
 - emacsql
-- emacsql-sqlite
 - magit-section
 - filenotify-recursive
 
@@ -230,6 +229,7 @@ it has not already been addressed on [GitHub][issues] or on
   ([Source](https://github.com/jethrokuan/braindump/tree/master/org))
 - [Alexey Shmalko](https://www.alexeyshmalko.com/)
 - [Sidharth Arya](https://sidhartharya.github.io/braindump/index.html)
+- [Martin Edström](https://edstrom.dev/)
 
 ## Contributing
 

@@ -6,7 +6,7 @@
 ;; URL: https://github.com/org-roam/org-roam
 ;; Keywords: org-mode, roam, convenience
 ;; Version: 2.2.2
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.4") (emacsql "3.0.0") (emacsql-sqlite "1.0.0") (magit-section "3.0.0"))
+;; Package-Requires: ((emacs "26.1") (dash "2.13") (org "9.6") (emacsql "4.1.0") (magit-section "3.0.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -710,8 +710,6 @@ the current value of `point'."
 
 (defun org-roam-capture--finalize ()
   "Finalize the `org-roam-capture' process."
-  (when-let ((region (org-roam-capture--get :region)))
-    (org-roam-unshield-region (car region) (cdr region)))
   (if org-note-abort
       (when-let ((new-file (org-roam-capture--get :new-file))
                  (_ (yes-or-no-p "Delete file for aborted capture?")))
@@ -743,7 +741,6 @@ This function is to be called in the Org-capture finalization process."
               (buf (marker-buffer mkr)))
     (with-current-buffer buf
       (when-let ((region (org-roam-capture--get :region)))
-        (org-roam-unshield-region (car region) (cdr region))
         (delete-region (car region) (cdr region))
         (set-marker (car region) nil)
         (set-marker (cdr region) nil))
